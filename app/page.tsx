@@ -1,22 +1,18 @@
-import { Suspense } from "react"
-// 👇 Alias para no chocar con la export especial
-import NextDynamic from "next/dynamic"
+// app/page.tsx  (Server Component, sin "use client")
+import { Suspense } from "react";
 
-// 👇 Export especial de Next (no la quites)
-export const dynamic = "force-dynamic"
-
-// Carga dinámica del form (si el componente usa useSearchParams o router hooks)
-const GastosOperativosForm = NextDynamic(
-  () => import("@/components/gastos-operativos-form").then(m => m.GastosOperativosForm),
-  { ssr: false }
-)
+// evita que Next intente prerenderizar estático
+export const dynamic = "force-dynamic";
 
 export default function Home() {
   return (
-    <main className="min-h-screen">
+    <main>
       <Suspense fallback={<div>Cargando…</div>}>
-        <GastosOperativosForm />
+        <GastosFormClient />
       </Suspense>
     </main>
-  )
+  );
 }
+
+// Importamos el componente cliente (usa hooks del router, etc.)
+import GastosFormClient from "./GastosFormClient";
