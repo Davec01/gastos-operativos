@@ -7,27 +7,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Trash2, FileText, Calculator, Fuel, Utensils, Bed, Car, AlertCircle } from "lucide-react"
+import { Plus, Trash2, FileText, Calculator, Utensils, Bed, Car, AlertCircle } from "lucide-react"
 
 // ────────────────────────────────────────────────────────────────────────────────
 // Tipos y constantes
 // ────────────────────────────────────────────────────────────────────────────────
 
-type TipoGasto = "combustible" | "alimentacion" | "hospedaje" | "peajes" | "otros"
+type TipoGasto = "alimentacion" | "hospedaje" | "peajes" | "otros"
 
 interface GastoOperativo {
   id: string
   tipo: TipoGasto | ""
-  tipoCombustible?: "diesel" | "gasolina" | "gas"
-  kmFinal?: string
-  tanqueoOperacional?: boolean
-  galonesTanqueados?: string
-  valorTotalCombustible?: string
   valorTotal?: string
 }
 
 const TIPOS_GASTO: { value: TipoGasto; label: string; icon: any }[] = [
-  { value: "combustible", label: "Combustible", icon: Fuel },
   { value: "alimentacion", label: "Alimentación", icon: Utensils },
   { value: "hospedaje", label: "Hospedaje", icon: Bed },
   { value: "peajes", label: "Peajes", icon: Car },
@@ -81,102 +75,7 @@ function CamposEspecificos({
   gasto: GastoOperativo
   actualizar: (campo: keyof GastoOperativo, valor: string | boolean) => void
 }) {
-  if (gasto.tipo === "combustible") {
-    return (
-      <div className="space-y-5 p-4 sm:p-6 bg-slate-100/80 rounded-2xl shadow-sm border border-slate-200">
-        <h4 className="font-semibold text-slate-800 flex items-center gap-3 text-base sm:text-lg">
-          <span className="p-2 bg-blue-100 rounded-2xl">
-            <Fuel className="h-5 w-5 text-blue-700" />
-          </span>
-          Información de Combustible
-        </h4>
-
-        {/* Grid de campos */}
-        <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
-          <div className="space-y-2.5">
-            <Label className="text-sm font-semibold text-slate-900">Tipo de Combustible *</Label>
-            <Select
-              value={gasto.tipoCombustible || ""}
-              onValueChange={(value) => actualizar("tipoCombustible", value)}
-            >
-              <SelectTrigger className="h-11 sm:h-12 bg-slate-200 border-slate-400 text-slate-900 rounded-xl">
-                <SelectValue placeholder="Diesel, Gasolina..." />
-              </SelectTrigger>
-              <SelectContent className="bg-white border-slate-300 rounded-xl">
-                <SelectItem value="diesel">Diesel</SelectItem>
-                <SelectItem value="gasolina">Gasolina</SelectItem>
-                <SelectItem value="gas">Gas</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2.5">
-            <Label className="text-sm font-semibold text-slate-900">KM Final</Label>
-            <Input
-              type="number"
-              placeholder="125286"
-              value={gasto.kmFinal || ""}
-              onChange={(e) => actualizar("kmFinal", e.target.value)}
-              className="h-11 sm:h-12 bg-slate-200 border-slate-400 rounded-xl"
-            />
-          </div>
-
-          <div className="space-y-2.5">
-            <Label className="text-sm font-semibold text-slate-900">Galones/m³ tanqueados</Label>
-            <Input
-              type="number"
-              step="0.01"
-              placeholder="11.286"
-              value={gasto.galonesTanqueados || ""}
-              onChange={(e) => actualizar("galonesTanqueados", e.target.value)}
-              className="h-11 sm:h-12 bg-slate-200 border-slate-400 rounded-xl"
-            />
-          </div>
-        </div> {/* ← cierre de la grilla ✅ */}
-
-        {/* Valor total combustible en COP */}
-        <div className="space-y-1.5">
-          <Label className="text-sm font-semibold text-slate-900">Valor total facturas combustible *</Label>
-          <Input
-            type="number"
-            inputMode="numeric"
-            step="1"
-            min="0"
-            placeholder="120000"
-            value={gasto.valorTotalCombustible || ""}
-            onChange={(e) => actualizar("valorTotalCombustible", e.target.value)}
-            className="h-11 sm:h-12 bg-slate-200 border-slate-400 rounded-xl"
-            required
-          />
-          <p className="text-xs text-slate-600">{formatCOP(gasto.valorTotalCombustible || 0)}</p>
-        </div>
-
-        <div className="flex items-center gap-3 p-3 sm:p-4 bg-blue-100/80 rounded-2xl border border-blue-200">
-          <Checkbox
-            id={`tanqueo-${gasto.id}`}
-            checked={gasto.tanqueoOperacional || false}
-            onCheckedChange={(checked) => actualizar("tanqueoOperacional", Boolean(checked))}
-            className="border-slate-400 data-[state=checked]:bg-blue-700 data-[state=checked]:border-blue-700"
-          />
-          <Label htmlFor={`tanqueo-${gasto.id}`} className="text-sm font-medium text-slate-900">
-            ¿Tanqueo para gastos operacionales?
-          </Label>
-        </div>
-
-        {/* Archivos (implementar storage real después) */}
-        <div className="space-y-2.5">
-          <Label className="text-sm font-semibold text-slate-900">Facturas de Combustible</Label>
-          <Input
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            className="h-11 sm:h-12 bg-slate-200 border-slate-400 rounded-xl file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-700 file:text-white"
-          />
-        </div>
-      </div>
-    )
-  }
-
-  if (gasto.tipo && gasto.tipo !== "combustible") {
+  if (gasto.tipo) {
     const tipoInfo = TIPOS_GASTO.find((t) => t.value === gasto.tipo)
     const Icon = (tipoInfo?.icon || AlertCircle) as any
 
@@ -295,16 +194,22 @@ export function GastosOperativosForm() {
   const [gastosOperativos, setGastosOperativos] = useState<GastoOperativo[]>([])
   const [empleado, setEmpleado] = useState<string>("")
 
-  // Autocompletar empleado
+  // Autocompletar empleado usando PIN (telegram_id como PIN)
   useEffect(() => {
-    const tgId = getTelegramIdFallback()
-    if (!tgId) return
+    const pin = getTelegramIdFallback()
+    if (!pin) return
     ;(async () => {
       try {
-        const r = await fetch(`/api/usuario?telegram_id=${encodeURIComponent(tgId)}`)
+        // Buscar empleado por PIN en la API externa
+        const r = await fetch(`/api/usuario-por-pin?pin=${encodeURIComponent(pin)}`)
         const j = await r.json()
-        const nombre = (j?.empleado || j?.nombre || "").trim()
-        if (nombre) setEmpleado(nombre)
+        const nombre = (j?.empleado || "").trim()
+        if (nombre) {
+          setEmpleado(nombre)
+          console.log(`✅ Empleado encontrado por PIN: ${nombre}`)
+        } else {
+          console.warn(`⚠️ No se encontró empleado con PIN: ${pin}`)
+        }
       } catch (e) {
         console.error("No se pudo autocompletar empleado:", e)
       }
@@ -319,7 +224,7 @@ export function GastosOperativosForm() {
 
   const totalGeneralNum = useMemo(() => {
     return gastosOperativos.reduce((acc, g) => {
-      return acc + (g.tipo === "combustible" ? parseMonto(g.valorTotalCombustible) : parseMonto(g.valorTotal))
+      return acc + parseMonto(g.valorTotal)
     }, 0)
   }, [gastosOperativos])
 

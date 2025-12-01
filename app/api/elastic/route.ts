@@ -54,9 +54,7 @@ export async function POST(req: NextRequest) {
     // dentro de la ventana indicada, y con datos mínimos para indexación.
     const q = `
       SELECT id AS id_pg,
-             empleado, telegram_id, tipo, tipo_combustible,
-             km_final, tanqueo_operacional, galones_tanqueados,
-             valor_total_combustible, valor_total,
+             empleado, telegram_id, tipo, valor_total,
              loc_lat, loc_lon, loc_ts, created_at
         FROM public.gastos_operacionales
        WHERE telegram_id = $1
@@ -82,11 +80,6 @@ export async function POST(req: NextRequest) {
       empleado: row.empleado,
       telegram_id: row.telegram_id,
       tipo: row.tipo,
-      tipo_combustible: row.tipo_combustible,
-      km_final: row.km_final,
-      tanqueo_operacional: row.tanqueo_operacional,
-      galones_tanqueados: row.galones_tanqueados,
-      valor_total_combustible: row.valor_total_combustible,
       valor_total: row.valor_total,
       location: {
         lat: Number(row.loc_lat),
