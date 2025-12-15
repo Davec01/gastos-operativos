@@ -77,7 +77,7 @@ async function enviarGastoIndividualAOdoo(params: {
     ts: Date | null;
   };
   token: string;
-}): Promise<{ success: boolean; message?: string }> {
+}): Promise<{ success: boolean; message?: string; odoo_id?: number }> {
   try {
     const { empleado, telegram_id, employee_id, gasto, ubicacion, token } = params;
 
@@ -135,15 +135,24 @@ async function enviarGastoIndividualAOdoo(params: {
       }
     );
 
-    const result = await response.text();
+    const resultText = await response.text();
 
     if (!response.ok) {
-      console.error(`Error enviando a Odoo: ${response.status} - ${result}`);
-      return { success: false, message: `Error ${response.status}: ${result}` };
+      console.error(`Error enviando a Odoo: ${response.status} - ${resultText}`);
+      return { success: false, message: `Error ${response.status}: ${resultText}` };
     }
 
-    console.log("✅ Gastos enviados exitosamente a Odoo:", result);
-    return { success: true, message: result };
+    // Intentar parsear la respuesta para obtener el ID de Odoo
+    let odoo_id: number | undefined;
+    try {
+      const resultJson = JSON.parse(resultText);
+      odoo_id = resultJson.id || resultJson.record_id || undefined;
+      console.log("✅ Gasto enviado exitosamente a Odoo. ID:", odoo_id);
+    } catch {
+      console.log("✅ Gasto enviado exitosamente a Odoo (respuesta no JSON):", resultText);
+    }
+
+    return { success: true, message: resultText, odoo_id };
 
   } catch (error: any) {
     console.error("Error enviando gastos a Odoo:", error);
@@ -190,6 +199,8 @@ export async function POST(req: Request) {
     `;
 
     let inserted = 0;
+    const gastosPG: Array<{ pgId: number; gasto: GastoOperativo }> = [];
+
     for (const it of items) {
       const params = [
         empleado,
@@ -203,6 +214,9 @@ export async function POST(req: Request) {
       const r = await client.query(q, params);
       const pgId = r.rows[0].id;
       inserted++;
+
+      // Guardar la asociación entre el ID de PG y el gasto para luego enviar a Odoo
+      gastosPG.push({ pgId, gasto: it });
 
       esDocs.push({
         id_pg: pgId,
@@ -252,8 +266,8 @@ export async function POST(req: Request) {
           console.log(`Empleado encontrado en Odoo: ID ${empleadoOdoo.id}, PIN ${empleadoOdoo.codigo_pin}`);
           console.log(`Enviando ${items.length} gastos individuales a Odoo...`);
 
-          // Enviar cada gasto individualmente
-          for (const gasto of items) {
+          // Enviar cada gasto individualmente y actualizar odoo_record_id
+          for (const { pgId, gasto } of gastosPG) {
             const odooResult = await enviarGastoIndividualAOdoo({
               empleado,
               telegram_id,
@@ -274,7 +288,20 @@ export async function POST(req: Request) {
             });
 
             if (odooResult.success) {
-              console.log(`✅ Gasto ${gasto.tipo} enviado exitosamente a Odoo`);
+              console.log(`✅ Gasto ${gasto.tipo} enviado exitosamente a Odoo. ID: ${odooResult.odoo_id}`);
+
+              // Actualizar el odoo_record_id en PostgreSQL
+              if (odooResult.odoo_id) {
+                try {
+                  await client.query(
+                    `UPDATE public.gastos_operacionales SET odoo_record_id = $1 WHERE id = $2`,
+                    [odooResult.odoo_id, pgId]
+                  );
+                  console.log(`✅ odoo_record_id actualizado en PG para gasto ${pgId}`);
+                } catch (updateError) {
+                  console.error(`Error actualizando odoo_record_id para gasto ${pgId}:`, updateError);
+                }
+              }
             } else {
               console.warn(`⚠️ Error al enviar gasto ${gasto.tipo} a Odoo:`, odooResult.message);
             }
