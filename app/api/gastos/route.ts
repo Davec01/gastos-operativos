@@ -11,6 +11,22 @@ type GastoOperativo = {
   valorTotal?: string | number;
 };
 
+// Mapeo de tipos de gasto a product_id de Odoo
+const PRODUCT_ID_MAP: Record<string, number> = {
+  alimentacion: 9680, // ALIMENTACION OPERATIVO
+  hospedaje: 12132, // ALOJAMIENTO OPERATIVO
+  peajes: 9684, // PEAJE OPERATIVO
+  otros: 12166, // GASTOS VARIOS
+};
+
+// Nombres descriptivos para cada tipo de gasto
+const GASTO_NAMES: Record<string, string> = {
+  alimentacion: "ALIMENTACION OPERATIVO",
+  hospedaje: "ALOJAMIENTO OPERATIVO",
+  peajes: "PEAJE OPERATIVO",
+  otros: "GASTOS VARIOS",
+};
+
 function toNum(v: unknown) {
   if (v === null || v === undefined || v === "") return null;
   const n = Number.parseFloat(String(v));
@@ -48,13 +64,13 @@ async function obtenerDatosEmpleados(): Promise<{
 }
 
 /**
- * Envía los gastos a Odoo
+ * Envía un gasto individual a Odoo usando el endpoint /api/gastos/register
  */
-async function enviarGastosAOdoo(params: {
+async function enviarGastoIndividualAOdoo(params: {
   empleado: string;
   telegram_id: number | null;
   employee_id: number | null;
-  gastos: GastoOperativo[];
+  gasto: GastoOperativo;
   ubicacion: {
     lat: number | null;
     lon: number | null;
@@ -63,73 +79,51 @@ async function enviarGastosAOdoo(params: {
   token: string;
 }): Promise<{ success: boolean; message?: string }> {
   try {
-    const { empleado, telegram_id, employee_id, gastos, ubicacion, token } = params;
+    const { empleado, telegram_id, employee_id, gasto, ubicacion, token } = params;
 
-    // Calcular totales por tipo
-    const totales = {
-      feeding_value: 0,
-      lodging_value: 0,
-      tolls_value: 0,
-      others_value: 0,
-    };
+    const valor = toNum(gasto.valorTotal) || 0;
+    if (valor <= 0) {
+      return { success: false, message: "Valor del gasto debe ser mayor a 0" };
+    }
 
-    gastos.forEach((gasto) => {
-      const valor = toNum(gasto.valorTotal) || 0;
+    // Obtener product_id y nombre según el tipo de gasto
+    const product_id = PRODUCT_ID_MAP[gasto.tipo];
+    const name = GASTO_NAMES[gasto.tipo];
 
-      switch (gasto.tipo) {
-        case "alimentacion":
-          totales.feeding_value += valor;
-          break;
-        case "hospedaje":
-          totales.lodging_value += valor;
-          break;
-        case "peajes":
-          totales.tolls_value += valor;
-          break;
-        case "otros":
-          totales.others_value += valor;
-          break;
-      }
-    });
+    if (!product_id) {
+      return { success: false, message: `Tipo de gasto no soportado: ${gasto.tipo}` };
+    }
 
-    // Preparar payload para Odoo
-    // IMPORTANTE: Odoo espera valores específicos según el ejemplo de Postman
-    const odooPayload: any = {
-      state: "draft",
+    // Preparar fecha actual en formato YYYY-MM-DD
+    const fecha = ubicacion.ts
+      ? new Date(ubicacion.ts).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0];
+
+    // Preparar ubicación GPS
+    const ubicacion_gps_telegram = ubicacion.lat && ubicacion.lon
+      ? `${ubicacion.lat}° N, ${ubicacion.lon}° E`
+      : "No disponible";
+
+    // Preparar payload para Odoo (endpoint /api/gastos/register)
+    const odooPayload = {
+      name: name,
+      product_id: product_id,
+      total_amount: valor,
+      employee_id: employee_id,
+      description: `Gasto registrado por ${empleado}`,
+      date: fecha,
+      id_telegram: telegram_id ? String(telegram_id) : "",
+      ubicacion_gps_vehiculo: "No disponible", // Por ahora no tenemos ubicación del vehículo
+      ubicacion_gps_telegram: ubicacion_gps_telegram,
       company_id: 1,
-      employee_id: employee_id, // ID del empleado en Odoo (no telegram_id)
-
-      // Fechas (check_in y check_out)
-      check_in: ubicacion.ts ? new Date(ubicacion.ts).toISOString().replace('T', ' ').split('.')[0] : new Date().toISOString().replace('T', ' ').split('.')[0],
-      check_out: new Date().toISOString().replace('T', ' ').split('.')[0],
-
-      // Valores de gastos (solo enviar valor numérico, sin el campo booleano)
-      ...(totales.feeding_value > 0 && {
-        feeding_value: totales.feeding_value,
-      }),
-      ...(totales.lodging_value > 0 && {
-        lodging_value: totales.lodging_value,
-      }),
-      ...(totales.tolls_value > 0 && {
-        tolls_value: totales.tolls_value,
-      }),
-      ...(totales.others_value > 0 && {
-        others_value: totales.others_value,
-      }),
-
-      // Campos de combustible (siempre 0 porque eliminamos combustible)
-      fuel_type: "diesel",
-      fuel_value: 0.0,
-
-      // Observaciones
-      observations: `Gastos operativos registrados por ${empleado}`,
-      notes: telegram_id ? `Telegram ID: ${telegram_id}` : "Sin Telegram ID",
+      state: "draft",
+      // No enviamos attachment por ahora (type_file, attachment_filename, attachment)
     };
 
-    console.log("Enviando gastos a Odoo:", odooPayload);
+    console.log("Enviando gasto individual a Odoo:", odooPayload);
 
     const response = await fetch(
-      "https://viacotur16-qa11-22388022.dev.odoo.com/api/posoperacional/register",
+      "https://viacotur16-qa11-22388022.dev.odoo.com/api/gastos/register",
       {
         method: "POST",
         headers: {
@@ -239,9 +233,10 @@ export async function POST(req: Request) {
       esErrors.push(e?.message || "error ES");
     }
 
-    // ==== Enviar a Odoo ====
+    // ==== Enviar a Odoo (cada gasto individualmente) ====
     let odooSuccess = false;
     let odooMessage = "";
+    const odooResults: Array<{ tipo: string; success: boolean; message?: string }> = [];
 
     try {
       console.log("Obteniendo datos de API empleados...");
@@ -255,29 +250,41 @@ export async function POST(req: Request) {
 
         if (empleadoOdoo) {
           console.log(`Empleado encontrado en Odoo: ID ${empleadoOdoo.id}, PIN ${empleadoOdoo.codigo_pin}`);
-          console.log("Enviando gastos a Odoo...");
+          console.log(`Enviando ${items.length} gastos individuales a Odoo...`);
 
-          const odooResult = await enviarGastosAOdoo({
-            empleado,
-            telegram_id,
-            employee_id: empleadoOdoo.id, // Usamos el ID real de Odoo
-            gastos: items,
-            ubicacion: {
-              lat: loc_lat,
-              lon: loc_lon,
-              ts: loc_ts,
-            },
-            token,
-          });
+          // Enviar cada gasto individualmente
+          for (const gasto of items) {
+            const odooResult = await enviarGastoIndividualAOdoo({
+              empleado,
+              telegram_id,
+              employee_id: empleadoOdoo.id, // Usamos el ID real de Odoo
+              gasto: gasto,
+              ubicacion: {
+                lat: loc_lat,
+                lon: loc_lon,
+                ts: loc_ts,
+              },
+              token,
+            });
 
-          odooSuccess = odooResult.success;
-          odooMessage = odooResult.message || "";
+            odooResults.push({
+              tipo: gasto.tipo,
+              success: odooResult.success,
+              message: odooResult.message,
+            });
 
-          if (odooResult.success) {
-            console.log("✅ Gastos enviados exitosamente a Odoo");
-          } else {
-            console.warn("⚠️ Error al enviar gastos a Odoo:", odooResult.message);
+            if (odooResult.success) {
+              console.log(`✅ Gasto ${gasto.tipo} enviado exitosamente a Odoo`);
+            } else {
+              console.warn(`⚠️ Error al enviar gasto ${gasto.tipo} a Odoo:`, odooResult.message);
+            }
           }
+
+          // Considerar éxito si al menos un gasto se envió correctamente
+          const gastosExitosos = odooResults.filter(r => r.success).length;
+          odooSuccess = gastosExitosos > 0;
+          odooMessage = `${gastosExitosos}/${items.length} gastos enviados a Odoo`;
+
         } else {
           console.warn(`⚠️ Empleado con PIN ${telegram_id} no encontrado en Odoo`);
           odooMessage = `Empleado con PIN ${telegram_id} no encontrado en sistema Odoo`;
