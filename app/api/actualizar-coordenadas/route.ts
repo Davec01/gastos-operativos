@@ -214,11 +214,11 @@ export async function POST(request: Request) {
             loc_ts = NOW(),
             ubicacion_gps_telegram = 'POINT(' || $2::text || ' ' || $1::text || ')'
           WHERE id_ubicacion = $3::uuid
-            AND telegram_id = $4
+            AND telegram_id = $4::bigint
             AND (loc_lat IS NULL OR loc_lon IS NULL)
           RETURNING id, id_ubicacion, odoo_record_id, empleado
         `;
-        params = [latNum, lonNum, id_ubicacion, telegram_id];
+        params = [latNum, lonNum, id_ubicacion, Number(telegram_id)];
       } else {
         // FALLBACK: Buscar por telegram_id + ventana de tiempo (comportamiento anterior)
         console.log("[Webhook] Usando búsqueda por tiempo (fallback) para telegram_id:", telegram_id);
