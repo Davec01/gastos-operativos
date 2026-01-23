@@ -21,11 +21,16 @@ const BOT_URL = process.env.BOT_URL || "http://35.223.72.198:4002";
  * }
  */
 export async function POST(req: NextRequest) {
+  console.log("🚀 /api/notificar-bot - Inicio de request");
+
   try {
     const body = await req.json();
     const { action, telegram_id, id_ubicacion } = body;
 
+    console.log("📨 Body recibido:", JSON.stringify(body));
+
     if (!action || !telegram_id) {
+      console.error("❌ Faltan parámetros requeridos");
       return NextResponse.json(
         { ok: false, error: "action y telegram_id son requeridos" },
         { status: 400 }
@@ -40,6 +45,7 @@ export async function POST(req: NextRequest) {
     switch (action) {
       case "set_pending_ubicacion":
         if (!id_ubicacion) {
+          console.error("❌ Falta id_ubicacion para set_pending_ubicacion");
           return NextResponse.json(
             { ok: false, error: "id_ubicacion es requerido para set_pending_ubicacion" },
             { status: 400 }
@@ -54,6 +60,7 @@ export async function POST(req: NextRequest) {
         break;
 
       default:
+        console.error(`❌ Acción desconocida: ${action}`);
         return NextResponse.json(
           { ok: false, error: `Acción desconocida: ${action}` },
           { status: 400 }
@@ -64,35 +71,56 @@ export async function POST(req: NextRequest) {
     console.log(`📡 Llamando a: ${url}`);
     console.log(`📦 Payload:`, JSON.stringify(payload));
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    // Agregar timeout de 10 segundos para evitar que la conexión se quede colgada
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const responseText = await response.text();
-    console.log(`📥 Respuesta del bot (${response.status}):`, responseText);
-
-    let data;
     try {
-      data = JSON.parse(responseText);
-    } catch {
-      data = { raw: responseText };
-    }
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      console.error(`❌ Error del bot: ${response.status}`, data);
-      return NextResponse.json(
-        { ok: false, error: `Error del bot: ${response.status}`, data },
-        { status: response.status }
-      );
-    }
+      clearTimeout(timeoutId);
 
-    console.log(`✅ Bot notificado exitosamente: ${action}`);
-    return NextResponse.json({ ok: true, data });
+      const responseText = await response.text();
+      console.log(`📥 Respuesta del bot (${response.status}):`, responseText);
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = { raw: responseText };
+      }
+
+      if (!response.ok) {
+        console.error(`❌ Error del bot: ${response.status}`, data);
+        return NextResponse.json(
+          { ok: false, error: `Error del bot: ${response.status}`, data },
+          { status: response.status }
+        );
+      }
+
+      console.log(`✅ Bot notificado exitosamente: ${action}`);
+      return NextResponse.json({ ok: true, data });
+
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        console.error("❌ Timeout llamando al bot (10s)");
+        return NextResponse.json(
+          { ok: false, error: "Timeout: el bot no respondió en 10 segundos" },
+          { status: 504 }
+        );
+      }
+      throw fetchError;
+    }
 
   } catch (error: any) {
     console.error("❌ Error llamando al bot:", error?.message || error);
+    console.error("❌ Stack:", error?.stack);
     return NextResponse.json(
       { ok: false, error: error?.message || "Error de conexión con el bot" },
       { status: 500 }
