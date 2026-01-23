@@ -5,10 +5,17 @@ import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { ES_INDEX, ensureIndex, bulkIndex } from "@/lib/elastic";
 
+type ArchivoAdjunto = {
+  nombre: string;
+  tipo: "pdf" | "image";
+  base64: string;
+};
+
 type GastoOperativo = {
   id?: string;
   tipo: "alimentacion" | "hospedaje" | "peajes" | "otros";
   valorTotal?: string | number;
+  archivo?: ArchivoAdjunto;
 };
 
 // Mapeo de tipos de gasto a product_id de Odoo
@@ -64,6 +71,50 @@ async function obtenerDatosEmpleados(): Promise<{
 }
 
 /**
+ * Obtiene la ubicación del vehículo desde la API externa de flota
+ */
+async function obtenerUbicacionVehiculo(telegramId: number | null): Promise<{
+  lat: number | null;
+  lon: number | null;
+  placa: string | null;
+  timestamp: string | null;
+} | null> {
+  if (!telegramId) return null;
+
+  try {
+    const response = await fetch(
+      `http://localhost:3000/api/vehiculo-ubicacion?telegram_id=${telegramId}`,
+      {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+
+    if (!response.ok) {
+      console.warn(`No se pudo obtener ubicación del vehículo: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (data.success && data.ubicacion) {
+      return {
+        lat: data.ubicacion.lat,
+        lon: data.ubicacion.lon,
+        placa: data.placa,
+        timestamp: data.ubicacion.timestamp,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.warn("Error obteniendo ubicación del vehículo:", error);
+    return null;
+  }
+}
+
+/**
  * Envía un gasto individual a Odoo usando el endpoint /api/gastos/register
  */
 async function enviarGastoIndividualAOdoo(params: {
@@ -76,10 +127,16 @@ async function enviarGastoIndividualAOdoo(params: {
     lon: number | null;
     ts: Date | null;
   };
+  ubicacionVehiculo: {
+    lat: number | null;
+    lon: number | null;
+    placa: string | null;
+    timestamp: string | null;
+  } | null;
   token: string;
 }): Promise<{ success: boolean; message?: string; odoo_id?: number }> {
   try {
-    const { empleado, telegram_id, employee_id, gasto, ubicacion, token } = params;
+    const { empleado, telegram_id, employee_id, gasto, ubicacion, ubicacionVehiculo, token } = params;
 
     const valor = toNum(gasto.valorTotal) || 0;
     if (valor <= 0) {
@@ -99,13 +156,18 @@ async function enviarGastoIndividualAOdoo(params: {
       ? new Date(ubicacion.ts).toISOString().split('T')[0]
       : new Date().toISOString().split('T')[0];
 
-    // Preparar ubicación GPS
+    // Preparar ubicación GPS del Telegram
     const ubicacion_gps_telegram = ubicacion.lat && ubicacion.lon
       ? `${ubicacion.lat}° N, ${ubicacion.lon}° E`
       : "No disponible";
 
+    // Preparar ubicación GPS del vehículo (coordenadas + placa)
+    const ubicacion_gps_vehiculo = ubicacionVehiculo?.lat && ubicacionVehiculo?.lon
+      ? `${ubicacionVehiculo.lat}° N, ${ubicacionVehiculo.lon}° E - Placa: ${ubicacionVehiculo.placa}`
+      : "No disponible";
+
     // Preparar payload para Odoo (endpoint /api/gastos/register)
-    const odooPayload = {
+    const odooPayload: Record<string, any> = {
       name: name,
       product_id: product_id,
       total_amount: valor,
@@ -113,14 +175,25 @@ async function enviarGastoIndividualAOdoo(params: {
       description: `Gasto registrado por ${empleado}`,
       date: fecha,
       id_telegram: telegram_id ? String(telegram_id) : "",
-      ubicacion_gps_vehiculo: "No disponible", // Por ahora no tenemos ubicación del vehículo
+      ubicacion_gps_vehiculo: ubicacion_gps_vehiculo,
       ubicacion_gps_telegram: ubicacion_gps_telegram,
       company_id: 1,
       state: "draft",
-      // No enviamos attachment por ahora (type_file, attachment_filename, attachment)
     };
 
-    console.log("Enviando gasto individual a Odoo:", odooPayload);
+    // Agregar attachment si existe
+    if (gasto.archivo && gasto.archivo.base64) {
+      // Odoo hr.expense solo acepta 'pdf' como type_file válido
+      odooPayload.type_file = 'pdf';
+      odooPayload.attachment_filename = gasto.archivo.nombre;
+      odooPayload.attachment = gasto.archivo.base64;
+      console.log(`📎 Adjuntando archivo: ${gasto.archivo.nombre} (type_file: pdf)`);
+    }
+
+    console.log("Enviando gasto individual a Odoo:", {
+      ...odooPayload,
+      attachment: odooPayload.attachment ? `[base64 ${odooPayload.attachment.length} chars]` : undefined
+    });
 
     const response = await fetch(
       "https://viacotur16-qa11-22388022.dev.odoo.com/api/gastos/register",
@@ -142,17 +215,16 @@ async function enviarGastoIndividualAOdoo(params: {
       return { success: false, message: `Error ${response.status}: ${resultText}` };
     }
 
-    // Intentar parsear la respuesta para obtener el ID de Odoo
-    let odoo_id: number | undefined;
+    // Parsear respuesta de Odoo (solo para logging)
     try {
       const resultJson = JSON.parse(resultText);
-      odoo_id = resultJson.id || resultJson.record_id || undefined;
-      console.log("✅ Gasto enviado exitosamente a Odoo. ID:", odoo_id);
+      console.log("✅ Gasto enviado a Odoo:", resultJson.response || resultText);
     } catch {
-      console.log("✅ Gasto enviado exitosamente a Odoo (respuesta no JSON):", resultText);
+      console.log("✅ Gasto enviado a Odoo:", resultText);
     }
 
-    return { success: true, message: resultText, odoo_id };
+    // Nota: Odoo no devuelve ID, usamos nuestro propio ID de PostgreSQL (odoo_record_id)
+    return { success: true, message: resultText, odoo_id: undefined };
 
   } catch (error: any) {
     console.error("Error enviando gastos a Odoo:", error);
@@ -190,18 +262,31 @@ export async function POST(req: Request) {
   try {
     await client.query("BEGIN");
 
+    // Obtener ubicación del vehículo ANTES de insertar en la BD
+    console.log("Obteniendo ubicación del vehículo para guardar en BD...");
+    const ubicacionVehiculoBD = await obtenerUbicacionVehiculo(telegram_id);
+
     const q = `
       INSERT INTO public.gastos_operacionales (
         empleado, telegram_id, tipo, valor_total,
-        loc_lat, loc_lon, loc_ts
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7)
-      RETURNING id
+        loc_lat, loc_lon, loc_ts,
+        vehiculo_placa, vehiculo_lat, vehiculo_lon, vehiculo_ts, ubicacion_gps_vehiculo,
+        archivo_nombre, archivo_tipo, archivo_base64
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      RETURNING id, id_ubicacion
     `;
 
     let inserted = 0;
-    const gastosPG: Array<{ pgId: number; gasto: GastoOperativo }> = [];
+    const gastosPG: Array<{ pgId: number; idUbicacion: string; gasto: GastoOperativo }> = [];
 
     for (const it of items) {
+      // Construir POINT de PostGIS para ubicación del vehículo si existe
+      let ubicacionGpsVehiculoPoint = null;
+      if (ubicacionVehiculoBD?.lat && ubicacionVehiculoBD?.lon) {
+        // PostGIS usa formato POINT(longitud latitud) - nota el orden!
+        ubicacionGpsVehiculoPoint = `POINT(${ubicacionVehiculoBD.lon} ${ubicacionVehiculoBD.lat})`;
+      }
+
       const params = [
         empleado,
         telegram_id,
@@ -210,13 +295,24 @@ export async function POST(req: Request) {
         loc_lat,
         loc_lon,
         loc_ts ? loc_ts.toISOString() : null,
+        // Datos del vehículo
+        ubicacionVehiculoBD?.placa || null,
+        ubicacionVehiculoBD?.lat || null,
+        ubicacionVehiculoBD?.lon || null,
+        ubicacionVehiculoBD?.timestamp || null,
+        ubicacionGpsVehiculoPoint, // Campo POINT de PostGIS
+        // Datos del archivo adjunto
+        it.archivo?.nombre || null,
+        it.archivo?.tipo || null,
+        it.archivo?.base64 || null,
       ];
       const r = await client.query(q, params);
       const pgId = r.rows[0].id;
+      const idUbicacion = r.rows[0].id_ubicacion;
       inserted++;
 
-      // Guardar la asociación entre el ID de PG y el gasto para luego enviar a Odoo
-      gastosPG.push({ pgId, gasto: it });
+      // Guardar la asociación entre el ID de PG, id_ubicacion y el gasto
+      gastosPG.push({ pgId, idUbicacion, gasto: it });
 
       esDocs.push({
         id_pg: pgId,
@@ -247,83 +343,20 @@ export async function POST(req: Request) {
       esErrors.push(e?.message || "error ES");
     }
 
-    // ==== Enviar a Odoo (cada gasto individualmente) ====
-    let odooSuccess = false;
-    let odooMessage = "";
-    const odooResults: Array<{ tipo: string; success: boolean; message?: string }> = [];
+    // ==== NO ENVIAR A ODOO TODAVÍA ====
+    // Los gastos se enviarán a Odoo cuando el usuario envíe su ubicación desde Telegram
+    // El webhook /api/actualizar-coordenadas se encargará de enviar a Odoo
+    console.log("✅ Gastos guardados en BD. Esperando coordenadas del empleado desde Telegram para enviar a Odoo...");
 
-    try {
-      console.log("Obteniendo datos de API empleados...");
-      const { token, empleados } = await obtenerDatosEmpleados();
+    const odooSuccess = false;
+    const odooMessage = "Esperando coordenadas del empleado desde Telegram";
 
-      if (token && empleados.length > 0) {
-        // Buscar el employee_id real en Odoo usando el codigo_pin (telegram_id)
-        const empleadoOdoo = empleados.find(
-          (emp: any) => emp.codigo_pin === String(telegram_id)
-        );
-
-        if (empleadoOdoo) {
-          console.log(`Empleado encontrado en Odoo: ID ${empleadoOdoo.id}, PIN ${empleadoOdoo.codigo_pin}`);
-          console.log(`Enviando ${items.length} gastos individuales a Odoo...`);
-
-          // Enviar cada gasto individualmente y actualizar odoo_record_id
-          for (const { pgId, gasto } of gastosPG) {
-            const odooResult = await enviarGastoIndividualAOdoo({
-              empleado,
-              telegram_id,
-              employee_id: empleadoOdoo.id, // Usamos el ID real de Odoo
-              gasto: gasto,
-              ubicacion: {
-                lat: loc_lat,
-                lon: loc_lon,
-                ts: loc_ts,
-              },
-              token,
-            });
-
-            odooResults.push({
-              tipo: gasto.tipo,
-              success: odooResult.success,
-              message: odooResult.message,
-            });
-
-            if (odooResult.success) {
-              console.log(`✅ Gasto ${gasto.tipo} enviado exitosamente a Odoo. ID: ${odooResult.odoo_id}`);
-
-              // Actualizar el odoo_record_id en PostgreSQL
-              if (odooResult.odoo_id) {
-                try {
-                  await client.query(
-                    `UPDATE public.gastos_operacionales SET odoo_record_id = $1 WHERE id = $2`,
-                    [odooResult.odoo_id, pgId]
-                  );
-                  console.log(`✅ odoo_record_id actualizado en PG para gasto ${pgId}`);
-                } catch (updateError) {
-                  console.error(`Error actualizando odoo_record_id para gasto ${pgId}:`, updateError);
-                }
-              }
-            } else {
-              console.warn(`⚠️ Error al enviar gasto ${gasto.tipo} a Odoo:`, odooResult.message);
-            }
-          }
-
-          // Considerar éxito si al menos un gasto se envió correctamente
-          const gastosExitosos = odooResults.filter(r => r.success).length;
-          odooSuccess = gastosExitosos > 0;
-          odooMessage = `${gastosExitosos}/${items.length} gastos enviados a Odoo`;
-
-        } else {
-          console.warn(`⚠️ Empleado con PIN ${telegram_id} no encontrado en Odoo`);
-          odooMessage = `Empleado con PIN ${telegram_id} no encontrado en sistema Odoo`;
-        }
-      } else {
-        console.warn("⚠️ No se pudo obtener token o datos de empleados");
-        odooMessage = "No se pudo obtener token o datos de empleados";
-      }
-    } catch (odooError: any) {
-      console.error("Error en integración con Odoo:", odooError);
-      odooMessage = odooError?.message || "Error desconocido";
-    }
+    // DEBUG: Log de ubicaciones para verificar que se están devolviendo correctamente
+    const ubicacionesResponse = gastosPG.map(g => ({
+      tipo: g.gasto.tipo,
+      id_ubicacion: g.idUbicacion
+    }));
+    console.log("📍 Ubicaciones a devolver al frontend:", JSON.stringify(ubicacionesResponse));
 
     return NextResponse.json({
       success: true,
@@ -333,6 +366,8 @@ export async function POST(req: Request) {
       es_errors: esErrors.length ? esErrors.slice(0, 3) : undefined,
       odoo_success: odooSuccess,
       odoo_message: odooSuccess ? "Enviado a Odoo exitosamente" : `Error Odoo: ${odooMessage}`,
+      // Devolver los id_ubicacion para que el formulario los pueda usar
+      ubicaciones: ubicacionesResponse
     });
   } catch (error: any) {
     await client.query("ROLLBACK");
