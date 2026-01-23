@@ -406,15 +406,19 @@ export function GastosOperativosForm() {
       }
 
       // Notificar al bot a través de la API proxy (evita CORS)
-      // IMPORTANTE: Esperar a que estas llamadas terminen ANTES del alert/reload
+      // CRÍTICO: Hacer esto ANTES del alert porque el WebView de Telegram puede
+      // interrumpir las promesas pendientes cuando se muestra el alert o se hace reload
+      let botNotificado = false
+
       if (data.success && data.ubicaciones && data.ubicaciones.length > 0 && tgId) {
         const idUbicacion = data.ubicaciones[0].id_ubicacion
         console.log("🔄 Notificando al bot con id_ubicacion:", idUbicacion)
 
-        try {
+        // Usar Promise.allSettled para asegurar que ambas llamadas se intenten
+        // incluso si una falla, y esperar a que AMBAS terminen
+        const botPromises = [
           // 1. Activar modo formulario en el bot
-          console.log("📤 Llamando set_pending_ubicacion...")
-          const setPendingRes = await fetch("/api/notificar-bot", {
+          fetch("/api/notificar-bot", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -422,52 +426,61 @@ export function GastosOperativosForm() {
               telegram_id: parseInt(tgId),
               id_ubicacion: idUbicacion
             }),
-          })
-          const setPendingData = await setPendingRes.json()
-          console.log("📥 Respuesta set_pending_ubicacion:", setPendingData)
+          }).then(async r => {
+            const d = await r.json()
+            console.log("📥 set_pending_ubicacion:", d)
+            return { action: "set_pending", ...d }
+          }).catch(e => {
+            console.error("❌ set_pending_ubicacion falló:", e)
+            return { action: "set_pending", ok: false, error: String(e) }
+          }),
 
-          if (setPendingData.ok) {
-            console.log("✅ set_pending_ubicacion enviado al bot:", idUbicacion)
-          } else {
-            console.warn("⚠️ Error en set_pending_ubicacion:", setPendingData)
-          }
-
-          // 2. Solicitar ubicación al usuario (envía mensaje de Telegram)
-          console.log("📤 Llamando solicitar_ubicacion...")
-          const solicitarRes = await fetch("/api/notificar-bot", {
+          // 2. Solicitar ubicación al usuario
+          fetch("/api/notificar-bot", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               action: "solicitar_ubicacion",
               telegram_id: parseInt(tgId)
             }),
+          }).then(async r => {
+            const d = await r.json()
+            console.log("📥 solicitar_ubicacion:", d)
+            return { action: "solicitar", ...d }
+          }).catch(e => {
+            console.error("❌ solicitar_ubicacion falló:", e)
+            return { action: "solicitar", ok: false, error: String(e) }
           })
-          const solicitarData = await solicitarRes.json()
-          console.log("📥 Respuesta solicitar_ubicacion:", solicitarData)
+        ]
 
-          if (solicitarData.ok) {
-            console.log("✅ solicitar_ubicacion enviado al bot")
-          } else {
-            console.warn("⚠️ Error en solicitar_ubicacion:", solicitarData)
-          }
+        // Esperar a que AMBAS promesas se resuelvan (éxito o error)
+        const results = await Promise.allSettled(botPromises)
+        console.log("📊 Resultados de notificación al bot:", results)
 
-        } catch (error) {
-          console.error("❌ Error notificando al bot:", error)
-          // NO hacer fail el formulario por esto
+        // Verificar si al menos set_pending_ubicacion tuvo éxito
+        const setPendingResult = results[0]
+        if (setPendingResult.status === 'fulfilled' && setPendingResult.value?.ok) {
+          botNotificado = true
+          console.log("✅ Bot notificado correctamente con id_ubicacion")
+        } else {
+          console.warn("⚠️ No se pudo notificar set_pending_ubicacion al bot")
         }
       } else {
-        console.warn("⚠️ No se pudo notificar al bot:", {
+        console.warn("⚠️ Condiciones no cumplidas para notificar al bot:", {
           success: data.success,
           ubicaciones: data.ubicaciones,
+          ubicacionesLength: data.ubicaciones?.length,
           tgId
         })
       }
 
-      // DESPUÉS de notificar al bot, mostrar mensaje y recargar
-      alert(
-        `✅ Gastos guardados para ${empleado}. Filas: ${data.inserted}.\n\n` +
-        `📍 Ahora envía tu ubicación GPS desde Telegram dentro de los próximos 10 minutos.`
-      )
+      // AHORA mostrar mensaje y recargar (después de que las promesas terminaron)
+      const mensajeExtra = botNotificado
+        ? "📍 Ahora envía tu ubicación GPS desde Telegram."
+        : "📍 Envía tu ubicación desde Telegram dentro de 10 minutos."
+
+      alert(`✅ Gastos guardados para ${empleado}. Filas: ${data.inserted}.\n\n${mensajeExtra}`)
+
       // Recargar la página para resetear todo el formulario
       window.location.reload()
     } catch (err: any) {
