@@ -406,11 +406,14 @@ export function GastosOperativosForm() {
       }
 
       // Notificar al bot a través de la API proxy (evita CORS)
+      // IMPORTANTE: Esperar a que estas llamadas terminen ANTES del alert/reload
       if (data.success && data.ubicaciones && data.ubicaciones.length > 0 && tgId) {
         const idUbicacion = data.ubicaciones[0].id_ubicacion
+        console.log("🔄 Notificando al bot con id_ubicacion:", idUbicacion)
 
         try {
           // 1. Activar modo formulario en el bot
+          console.log("📤 Llamando set_pending_ubicacion...")
           const setPendingRes = await fetch("/api/notificar-bot", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -421,6 +424,7 @@ export function GastosOperativosForm() {
             }),
           })
           const setPendingData = await setPendingRes.json()
+          console.log("📥 Respuesta set_pending_ubicacion:", setPendingData)
 
           if (setPendingData.ok) {
             console.log("✅ set_pending_ubicacion enviado al bot:", idUbicacion)
@@ -429,6 +433,7 @@ export function GastosOperativosForm() {
           }
 
           // 2. Solicitar ubicación al usuario (envía mensaje de Telegram)
+          console.log("📤 Llamando solicitar_ubicacion...")
           const solicitarRes = await fetch("/api/notificar-bot", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -438,6 +443,7 @@ export function GastosOperativosForm() {
             }),
           })
           const solicitarData = await solicitarRes.json()
+          console.log("📥 Respuesta solicitar_ubicacion:", solicitarData)
 
           if (solicitarData.ok) {
             console.log("✅ solicitar_ubicacion enviado al bot")
@@ -449,8 +455,15 @@ export function GastosOperativosForm() {
           console.error("❌ Error notificando al bot:", error)
           // NO hacer fail el formulario por esto
         }
+      } else {
+        console.warn("⚠️ No se pudo notificar al bot:", {
+          success: data.success,
+          ubicaciones: data.ubicaciones,
+          tgId
+        })
       }
 
+      // DESPUÉS de notificar al bot, mostrar mensaje y recargar
       alert(
         `✅ Gastos guardados para ${empleado}. Filas: ${data.inserted}.\n\n` +
         `📍 Ahora envía tu ubicación GPS desde Telegram dentro de los próximos 10 minutos.`
