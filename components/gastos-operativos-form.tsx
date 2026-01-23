@@ -410,6 +410,12 @@ export function GastosOperativosForm() {
       // interrumpir las promesas pendientes cuando se muestra el alert o se hace reload
       let botNotificado = false
 
+      // DEBUG: Log para verificar que llegamos a esta sección
+      console.log("🔍 DEBUG - Verificando condiciones para notificar al bot:")
+      console.log("  - data.success:", data.success)
+      console.log("  - data.ubicaciones:", data.ubicaciones)
+      console.log("  - tgId:", tgId)
+
       if (data.success && data.ubicaciones && data.ubicaciones.length > 0 && tgId) {
         const idUbicacion = data.ubicaciones[0].id_ubicacion
         console.log("🔄 Notificando al bot con id_ubicacion:", idUbicacion)
