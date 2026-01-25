@@ -278,12 +278,16 @@ export async function POST(request: Request) {
           const gasto = gastoResult.rows[0];
 
           // Buscar empleado en Odoo
+          // IMPORTANTE: Solo buscar entre empleados con puesto_trabajo = "Conductor"
           const empleadoOdoo = empleados.find(
-            (emp: any) => emp.codigo_pin === String(gasto.telegram_id)
+            (emp: any) =>
+              emp.codigo_pin === String(gasto.telegram_id) &&
+              emp.puesto_trabajo &&
+              emp.puesto_trabajo.toLowerCase() === "conductor"
           );
 
           if (!empleadoOdoo) {
-            console.warn(`[Webhook] Empleado con PIN ${gasto.telegram_id} no encontrado en Odoo`);
+            console.warn(`[Webhook] Empleado conductor con PIN ${gasto.telegram_id} no encontrado en Odoo`);
             continue;
           }
 
