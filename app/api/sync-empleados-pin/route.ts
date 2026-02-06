@@ -52,6 +52,7 @@ async function obtenerEmpleadosExternos(): Promise<{
       method: "GET",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": "Basic " + Buffer.from("Vi4c0:P@ssw0rd").toString("base64"),
       },
       // Timeout de 10 segundos
       signal: AbortSignal.timeout(10000),

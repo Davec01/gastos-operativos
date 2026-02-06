@@ -82,6 +82,7 @@ async function fetchEmpleadosConReintentos(
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": "Basic " + Buffer.from("Vi4c0:P@ssw0rd").toString("base64"),
         },
         signal: AbortSignal.timeout(timeoutMs),
       });

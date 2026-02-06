@@ -41,7 +41,10 @@ async function obtenerDatosEmpleados(): Promise<{
 
       const response = await fetch("http://35.223.72.198:4001/empleados", {
         method: "GET",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Basic " + Buffer.from("Vi4c0:P@ssw0rd").toString("base64"),
+        },
         signal: AbortSignal.timeout(timeoutMs),
       });
 
@@ -128,7 +131,8 @@ async function enviarGastoAOdoo(gasto: any, token: string, employeeId: number) {
     });
 
     const response = await fetch(
-      "https://viacotur16-qa11-22388022.dev.odoo.com/api/gastos/register",
+      "https://www.viacotur.com/api/gastos/register",
+      // "https://viacotur16-qa13-28046660.dev.odoo.com/api/gastos/register",
       {
         method: "POST",
         headers: {

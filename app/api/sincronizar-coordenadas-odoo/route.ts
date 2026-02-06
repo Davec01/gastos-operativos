@@ -21,7 +21,10 @@ export async function POST(request: Request) {
     // Obtener token dinámico de la API de empleados
     const tokenResponse = await fetch("http://35.223.72.198:4001/empleados", {
       method: "GET",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Basic " + Buffer.from("Vi4c0:P@ssw0rd").toString("base64"),
+      },
       signal: AbortSignal.timeout(10000),
     });
 
