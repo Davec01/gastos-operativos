@@ -186,11 +186,11 @@ async function enviarGastoIndividualAOdoo(params: {
 
     // Agregar attachment si existe
     if (gasto.archivo && gasto.archivo.base64) {
-      // Odoo hr.expense solo acepta 'pdf' como type_file válido
-      odooPayload.type_file = 'pdf';
+      const type_file = gasto.archivo.tipo === 'pdf' ? 'pdf' : 'jpg';
+      odooPayload.type_file = type_file;
       odooPayload.attachment_filename = gasto.archivo.nombre;
       odooPayload.attachment = gasto.archivo.base64;
-      console.log(`📎 Adjuntando archivo: ${gasto.archivo.nombre} (type_file: pdf)`);
+      console.log(`📎 Adjuntando archivo: ${gasto.archivo.nombre} (type_file: ${type_file})`);
     }
 
     console.log("Enviando gasto individual a Odoo:", {
@@ -200,7 +200,7 @@ async function enviarGastoIndividualAOdoo(params: {
 
     const response = await fetch(
       // "https://www.viacotur.com/api/gastos/register",
-      "https://viacotur16-qa11-22388022.dev.odoo.com/api/gastos/register",
+      "https://viacotur16-qa15-31954089.dev.odoo.com/api/gastos/register",
       {
         method: "POST",
         headers: {

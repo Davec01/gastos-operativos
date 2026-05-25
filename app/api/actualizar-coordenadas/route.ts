@@ -117,12 +117,11 @@ async function enviarGastoAOdoo(gasto: any, token: string, employeeId: number) {
 
     // Agregar archivo adjunto si existe
     if (gasto.archivo_base64 && gasto.archivo_nombre) {
-      // Odoo hr.expense solo acepta 'pdf' como type_file válido
-      // Para imágenes, usamos 'pdf' igualmente ya que Odoo detecta el tipo real por el contenido
-      odooPayload.type_file = 'pdf';
+      const type_file = gasto.archivo_tipo === 'pdf' ? 'pdf' : 'jpg';
+      odooPayload.type_file = type_file;
       odooPayload.attachment_filename = gasto.archivo_nombre;
       odooPayload.attachment = gasto.archivo_base64;
-      console.log(`[Odoo] 📎 Adjuntando archivo: ${gasto.archivo_nombre} (type_file: pdf)`);
+      console.log(`[Odoo] 📎 Adjuntando archivo: ${gasto.archivo_nombre} (type_file: ${type_file})`);
     }
 
     console.log("[Odoo] Enviando gasto:", {
@@ -131,8 +130,8 @@ async function enviarGastoAOdoo(gasto: any, token: string, employeeId: number) {
     });
 
     const response = await fetch(
-      "https://www.viacotur.com/api/gastos/register",
-      // "https://viacotur16-qa13-28046660.dev.odoo.com/api/gastos/register",
+      // "https://www.viacotur.com/api/gastos/register",
+      "https://viacotur16-qa15-31954089.dev.odoo.com/api/gastos/register",
       {
         method: "POST",
         headers: {
@@ -281,17 +280,26 @@ export async function POST(request: Request) {
 
           const gasto = gastoResult.rows[0];
 
-          // Buscar empleado en Odoo
-          // IMPORTANTE: Solo buscar entre empleados con puesto_trabajo = "Conductor"
-          const empleadoOdoo = empleados.find(
+          // Buscar empleado en Odoo por nombre del conductor (funciona tanto para conductores
+          // que envían su propio formulario como para gastos enviados por el admin en su nombre)
+          const nombreBuscar = gasto.empleado?.trim().toUpperCase();
+          let empleadoOdoo = empleados.find(
             (emp: any) =>
-              emp.codigo_pin === String(gasto.telegram_id) &&
-              emp.puesto_trabajo &&
-              emp.puesto_trabajo.toLowerCase() === "conductor"
+              emp.puesto_trabajo?.toLowerCase() === "conductor" &&
+              emp.nombre?.trim().toUpperCase() === nombreBuscar
           );
 
+          // Fallback: buscar por PIN si no se encontró por nombre
           if (!empleadoOdoo) {
-            console.warn(`[Webhook] Empleado conductor con PIN ${gasto.telegram_id} no encontrado en Odoo`);
+            empleadoOdoo = empleados.find(
+              (emp: any) =>
+                emp.codigo_pin === String(gasto.telegram_id) &&
+                emp.puesto_trabajo?.toLowerCase() === "conductor"
+            );
+          }
+
+          if (!empleadoOdoo) {
+            console.warn(`[Webhook] Conductor "${gasto.empleado}" (PIN: ${gasto.telegram_id}) no encontrado en Odoo`);
             continue;
           }
 

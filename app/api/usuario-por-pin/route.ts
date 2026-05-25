@@ -117,12 +117,32 @@ async function fetchEmpleadosConReintentos(
 
 /**
  * GET /api/usuario-por-pin?pin=123456789
+ * GET /api/usuario-por-pin?listar=true  → devuelve lista de todos los conductores
  *
  * Busca un empleado por su código PIN en la API externa de empleados.
  * El PIN corresponde al telegram_id del usuario.
  */
 export async function GET(req: NextRequest) {
   const pin = req.nextUrl.searchParams.get("pin");
+  const listar = req.nextUrl.searchParams.get("listar");
+
+  // Modo listado: devuelve todos los conductores
+  if (listar === "true") {
+    try {
+      let data: EmpleadosResponse | null = getCachedEmpleados();
+      if (!data) {
+        data = await fetchEmpleadosConReintentos("http://35.223.72.198:4001/empleados", 3, 30000);
+        setCachedEmpleados(data);
+      }
+      const conductores = (data?.items || [])
+        .filter(emp => emp.puesto_trabajo?.trim().toLowerCase() === "conductor")
+        .map(emp => ({ nombre: emp.nombre.trim(), pin: emp.codigo_pin }))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+      return NextResponse.json({ conductores }, { status: 200 });
+    } catch {
+      return NextResponse.json({ conductores: [] }, { status: 200 });
+    }
+  }
 
   // Respuesta tolerante: nunca rompas el front
   if (!pin) {

@@ -28,6 +28,8 @@ interface GastoOperativo {
   archivo?: ArchivoAdjunto
 }
 
+const ADMIN_PIN = "2039625899"
+
 const TIPOS_GASTO: { value: TipoGasto; label: string; icon: any }[] = [
   { value: "alimentacion", label: "Alimentación", icon: Utensils },
   { value: "hospedaje", label: "Hospedaje", icon: Bed },
@@ -258,6 +260,10 @@ export function GastosOperativosForm() {
   const [usuarioRegistrado, setUsuarioRegistrado] = useState<boolean | null>(null) // null = cargando
   const [validandoUsuario, setValidandoUsuario] = useState<boolean>(true)
 
+  // Estado para modo admin
+  const [isAdmin, setIsAdmin] = useState<boolean>(false)
+  const [conductores, setConductores] = useState<{ nombre: string; pin: string }[]>([])
+
   // Estado para prevenir doble envío
   const [enviando, setEnviando] = useState<boolean>(false)
 
@@ -291,20 +297,27 @@ export function GastosOperativosForm() {
         setValidandoUsuario(false)
         console.log(`✅ Usuario registrado: ${validacionData.nombre}`)
 
-        // PASO 2: Buscar empleado por PIN en la API externa
-        const r = await fetch(`/api/usuario-por-pin?pin=${encodeURIComponent(pin)}`)
-        const j = await r.json()
-        const nombre = (j?.empleado || "").trim()
-        if (nombre) {
-          setEmpleado(nombre)
-          console.log(`✅ Empleado encontrado por PIN: ${nombre}`)
+        // PASO 2: Buscar empleado o cargar lista si es admin
+        if (pin === ADMIN_PIN) {
+          setIsAdmin(true)
+          const rLista = await fetch(`/api/usuario-por-pin?listar=true`)
+          const jLista = await rLista.json()
+          setConductores(jLista?.conductores || [])
+          console.log(`✅ Admin detectado, conductores cargados: ${jLista?.conductores?.length}`)
         } else {
-          // Si no se encuentra en API externa, usar nombre de usuarios_registrados
-          if (validacionData.nombre) {
-            setEmpleado(validacionData.nombre)
-            console.log(`✅ Usando nombre de BD local: ${validacionData.nombre}`)
+          const r = await fetch(`/api/usuario-por-pin?pin=${encodeURIComponent(pin)}`)
+          const j = await r.json()
+          const nombre = (j?.empleado || "").trim()
+          if (nombre) {
+            setEmpleado(nombre)
+            console.log(`✅ Empleado encontrado por PIN: ${nombre}`)
           } else {
-            console.warn(`⚠️ No se encontró empleado con PIN: ${pin}`)
+            if (validacionData.nombre) {
+              setEmpleado(validacionData.nombre)
+              console.log(`✅ Usando nombre de BD local: ${validacionData.nombre}`)
+            } else {
+              console.warn(`⚠️ No se encontró empleado con PIN: ${pin}`)
+            }
           }
         }
 
@@ -600,13 +613,28 @@ export function GastosOperativosForm() {
             <CardContent className="p-4 sm:p-6 grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-slate-900">Conductor</Label>
-                <Input
-                  value={empleado}
-                  readOnly
-                  disabled
-                  className="h-11 sm:h-12 bg-slate-100 cursor-not-allowed"
-                  placeholder="Cargando conductor..."
-                />
+                {isAdmin ? (
+                  <Select value={empleado} onValueChange={setEmpleado}>
+                    <SelectTrigger className="h-11 sm:h-12 bg-slate-100 border-slate-400 rounded-xl">
+                      <SelectValue placeholder="Seleccionar conductor..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-300 rounded-xl max-h-72 overflow-y-auto">
+                      {conductores.map((c, i) => (
+                        <SelectItem key={c.pin || `conductor-${i}`} value={c.nombre}>
+                          {c.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={empleado}
+                    readOnly
+                    disabled
+                    className="h-11 sm:h-12 bg-slate-100 cursor-not-allowed"
+                    placeholder="Cargando conductor..."
+                  />
+                )}
               </div>
             </CardContent>
           </Card>
