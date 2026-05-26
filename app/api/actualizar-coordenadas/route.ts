@@ -130,8 +130,8 @@ async function enviarGastoAOdoo(gasto: any, token: string, employeeId: number) {
     });
 
     const response = await fetch(
-      // "https://www.viacotur.com/api/gastos/register",
-      "https://viacotur16-qa15-31954089.dev.odoo.com/api/gastos/register",
+      "https://www.viacotur.com/api/gastos/register",
+      // "https://viacotur16-qa15-31954089.dev.odoo.com/api/gastos/register",
       {
         method: "POST",
         headers: {
