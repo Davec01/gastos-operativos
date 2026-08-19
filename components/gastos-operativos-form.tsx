@@ -646,7 +646,7 @@ export function GastosOperativosForm() {
           {/* Conductor + Fecha */}
           <Card className="shadow-xl border-slate-300 bg-white rounded-2xl">
             <CardContent className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label className="text-sm font-semibold text-slate-900">Conductor</Label>
                 {isAdmin ? (
                   <Select value={empleado} onValueChange={handleSeleccionarConductor}>
@@ -671,14 +671,14 @@ export function GastosOperativosForm() {
                   />
                 )}
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label className="text-sm font-semibold text-slate-900">Fecha del Gasto</Label>
                 <Input
                   type="date"
                   value={fechaGasto}
                   max={new Date().toISOString().split("T")[0]}
                   onChange={(e) => setFechaGasto(e.target.value)}
-                  className="h-11 sm:h-12 bg-slate-100 border-slate-400 rounded-xl"
+                  className="h-11 sm:h-12 w-full max-w-full min-w-0 appearance-none bg-slate-100 border-slate-400 rounded-xl"
                   required
                 />
               </div>
