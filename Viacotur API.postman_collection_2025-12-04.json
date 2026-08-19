@@ -7,6 +7,166 @@
 	},
 	"item": [
 		{
+			"name": "list_gastos",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjIsImVtYWlsIjoiYWRtaW5AdmlhY290dXIxNi5vZG9vLmNvbSIsIm5hbWUiOiJBZG1pbmlzdHJhdG9yIiwiZXhwIjoxNzY0OTY2NDI1LCJhdWQiOiJFdmVudG8iLCJpc3MiOiJFdmVudG8ifQ.Ufgisv5vqDTKf3Z3Tw09oaERrG9se0ZA1aOsxH1FJ_c",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "https://viacotur16-qa11-22388022.dev.odoo.com/api/gastos?page=1&page_size=1000&date_init=01-01-2024 00:00:00&date_end=12-12-2025 23:59:59&company_id=1",
+					"protocol": "https",
+					"host": [
+						"viacotur16-qa11-22388022",
+						"dev",
+						"odoo",
+						"com"
+					],
+					"path": [
+						"api",
+						"gastos"
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "1"
+						},
+						{
+							"key": "page_size",
+							"value": "1000"
+						},
+						{
+							"key": "date_init",
+							"value": "01-01-2024 00:00:00"
+						},
+						{
+							"key": "date_end",
+							"value": "12-12-2025 23:59:59"
+						},
+						{
+							"key": "company_id",
+							"value": "1"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Register Fuel",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjIsImVtYWlsIjoiYWRtaW5AdmlhY290dXIxNi5vZG9vLmNvbSIsIm5hbWUiOiJBZG1pbmlzdHJhdG9yIiwiZXhwIjoxNzY0OTY2NDI1LCJhdWQiOiJFdmVudG8iLCJpc3MiOiJFdmVudG8ifQ.Ufgisv5vqDTKf3Z3Tw09oaERrG9se0ZA1aOsxH1FJ_c",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"vehicle_id\": 11791,\r\n    \"company_id\": 1,\r\n    \"agreement_id\": 1,\r\n    \"gallon\": 10.22,\r\n    \"amount\": 152600.0,\r\n    \"date\": \"2025-10-24\",\r\n    \"employee_id\": 3861,\r\n    \"ref_invoice\": \"FACT-3818\",\r\n    \"lat_origin\": \"56° Norte 12 Sur\",\r\n    \"long_origin\": \"56° Norte 12 Sur\",\r\n    \"supplier\": \"Estación de Servicio Prueba\",\r\n    \"fuel_type\": \"diesel\"    \r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://viacotur16-qa11-22388022.dev.odoo.com/api/fuel/register",
+					"protocol": "https",
+					"host": [
+						"viacotur16-qa11-22388022",
+						"dev",
+						"odoo",
+						"com"
+					],
+					"path": [
+						"api",
+						"fuel",
+						"register"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "list fuel",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjIsImVtYWlsIjoiYWRtaW5AdmlhY290dXIxNi5vZG9vLmNvbSIsIm5hbWUiOiJBZG1pbmlzdHJhdG9yIiwiZXhwIjoxNzY0OTY2NDI1LCJhdWQiOiJFdmVudG8iLCJpc3MiOiJFdmVudG8ifQ.Ufgisv5vqDTKf3Z3Tw09oaERrG9se0ZA1aOsxH1FJ_c",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "https://viacotur16-qa11-22388022.dev.odoo.com/api/fuel?page=1&page_size=1000&date_init=01-01-2024 00:00:00&date_end=12-12-2025 23:59:59&company_id=1",
+					"protocol": "https",
+					"host": [
+						"viacotur16-qa11-22388022",
+						"dev",
+						"odoo",
+						"com"
+					],
+					"path": [
+						"api",
+						"fuel"
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "1"
+						},
+						{
+							"key": "page_size",
+							"value": "1000"
+						},
+						{
+							"key": "date_init",
+							"value": "01-01-2024 00:00:00"
+						},
+						{
+							"key": "date_end",
+							"value": "12-12-2025 23:59:59"
+						},
+						{
+							"key": "company_id",
+							"value": "1"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
 			"name": "Register Reservas",
 			"request": {
 				"auth": {
@@ -588,7 +748,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjIsImVtYWlsIjoiYWRtaW5AdmlhY290dXIxNi5vZG9vLmNvbSIsIm5hbWUiOiJBZG1pbmlzdHJhdG9yIiwiZXhwIjoxNzYzMjQwMTQ3LCJhdWQiOiJFdmVudG8iLCJpc3MiOiJFdmVudG8ifQ.ZsicnsTXWc_hCHXmfLBMUR3dIKf8DZVsM6XHFv9rfEI",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjIsImVtYWlsIjoiYWRtaW5AdmlhY290dXIxNi5vZG9vLmNvbSIsIm5hbWUiOiJBZG1pbmlzdHJhdG9yIiwiZXhwIjoxNzY0OTY2NDI1LCJhdWQiOiJFdmVudG8iLCJpc3MiOiJFdmVudG8ifQ.Ufgisv5vqDTKf3Z3Tw09oaERrG9se0ZA1aOsxH1FJ_c",
 							"type": "string"
 						}
 					]
@@ -702,7 +862,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjIsImVtYWlsIjoiYWRtaW5AdmlhY290dXIxNi5vZG9vLmNvbSIsIm5hbWUiOiJBZG1pbmlzdHJhdG9yIiwiZXhwIjoxNzY0MzYzNzI5LCJhdWQiOiJFdmVudG8iLCJpc3MiOiJFdmVudG8ifQ.bqVVM902gq0DbmdeDxgEYZn8cigQQHsckbcw6nAL0fY",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjIsImVtYWlsIjoiYWRtaW5AdmlhY290dXIxNi5vZG9vLmNvbSIsIm5hbWUiOiJBZG1pbmlzdHJhdG9yIiwiZXhwIjoxNzY0OTY2NDI1LCJhdWQiOiJFdmVudG8iLCJpc3MiOiJFdmVudG8ifQ.Ufgisv5vqDTKf3Z3Tw09oaERrG9se0ZA1aOsxH1FJ_c",
 							"type": "string"
 						}
 					]
@@ -1387,7 +1547,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjIsImVtYWlsIjoiYWRtaW5AdmlhY290dXIxNi5vZG9vLmNvbSIsIm5hbWUiOiJBZG1pbmlzdHJhdG9yIiwiZXhwIjoxNzYzMjQwMTQ3LCJhdWQiOiJFdmVudG8iLCJpc3MiOiJFdmVudG8ifQ.ZsicnsTXWc_hCHXmfLBMUR3dIKf8DZVsM6XHFv9rfEI",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOjIsImVtYWlsIjoiYWRtaW5AdmlhY290dXIxNi5vZG9vLmNvbSIsIm5hbWUiOiJBZG1pbmlzdHJhdG9yIiwiZXhwIjoxNzY0OTY2NDI1LCJhdWQiOiJFdmVudG8iLCJpc3MiOiJFdmVudG8ifQ.Ufgisv5vqDTKf3Z3Tw09oaERrG9se0ZA1aOsxH1FJ_c",
 							"type": "string"
 						}
 					]

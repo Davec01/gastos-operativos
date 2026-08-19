@@ -107,7 +107,11 @@ async function enviarGastoAOdoo(gasto: any, token: string, employeeId: number) {
       total_amount: valor,
       employee_id: employeeId,
       description: `Gasto registrado por ${gasto.empleado}`,
-      date: gasto.created_at ? new Date(gasto.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      date: gasto.fecha_gasto
+        ? new Date(gasto.fecha_gasto).toISOString().split('T')[0]
+        : gasto.created_at
+          ? new Date(gasto.created_at).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0],
       id_telegram: String(gasto.telegram_id || ""),
       ubicacion_gps_vehiculo: ubicacion_gps_vehiculo,
       ubicacion_gps_telegram: ubicacion_gps_telegram,
@@ -207,19 +211,30 @@ export async function POST(request: Request) {
       const hasValidIdUbicacion = id_ubicacion && typeof id_ubicacion === 'string' && id_ubicacion.trim() !== '';
 
       if (hasValidIdUbicacion) {
-        // MÉTODO PREFERIDO: Buscar por id_ubicacion específico
-        console.log("[Webhook] Usando búsqueda por id_ubicacion:", id_ubicacion);
+        // MÉTODO PREFERIDO: Buscar por id_ubicacion para identificar la sesión,
+        // luego actualizar TODOS los gastos pendientes del mismo usuario en esa sesión.
+        // Esto garantiza que si el usuario envió varios gastos a la vez, todos reciben GPS.
+        console.log("[Webhook] Usando búsqueda por sesión (id_ubicacion de referencia):", id_ubicacion);
         query = `
-          UPDATE public.gastos_operacionales
+          WITH ref AS (
+            SELECT telegram_id, created_at
+            FROM public.gastos_operacionales
+            WHERE id_ubicacion = $3::uuid
+              AND telegram_id = $4::bigint
+            LIMIT 1
+          )
+          UPDATE public.gastos_operacionales g
           SET
             loc_lat = $1::double precision,
             loc_lon = $2::double precision,
             loc_ts = NOW(),
             ubicacion_gps_telegram = 'POINT(' || $2::text || ' ' || $1::text || ')'
-          WHERE id_ubicacion = $3::uuid
-            AND telegram_id = $4::bigint
-            AND (loc_lat IS NULL OR loc_lon IS NULL)
-          RETURNING id, id_ubicacion, odoo_record_id, empleado
+          FROM ref
+          WHERE g.telegram_id = ref.telegram_id
+            AND g.created_at >= ref.created_at - INTERVAL '2 minutes'
+            AND g.created_at <= ref.created_at + INTERVAL '2 minutes'
+            AND (g.loc_lat IS NULL OR g.loc_lon IS NULL)
+          RETURNING g.id, g.id_ubicacion, g.odoo_record_id, g.empleado
         `;
         params = [latNum, lonNum, id_ubicacion, Number(telegram_id)];
       } else {
@@ -258,7 +273,7 @@ export async function POST(request: Request) {
       const updatedRecords = result.rows;
       console.log(
         `[Webhook] ${updatedRecords.length} registro(s) actualizado(s):`,
-        updatedRecords.map((r) => r.id)
+        updatedRecords.map((r: any) => r.id)
       );
 
       // ==== ENVIAR A ODOO AHORA QUE TENEMOS TODAS LAS COORDENADAS ====
@@ -326,7 +341,7 @@ export async function POST(request: Request) {
         data: {
           records_updated: updatedRecords.length,
           gastos_enviados_odoo: gastosEnviados,
-          records: updatedRecords.map((r) => ({
+          records: updatedRecords.map((r: any) => ({
             id: r.id,
             id_ubicacion: r.id_ubicacion,
             odoo_record_id: r.odoo_record_id,

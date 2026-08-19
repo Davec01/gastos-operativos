@@ -199,8 +199,8 @@ async function enviarGastoIndividualAOdoo(params: {
     });
 
     const response = await fetch(
-      // "https://www.viacotur.com/api/gastos/register",
-      "https://viacotur16-qa15-31954089.dev.odoo.com/api/gastos/register",
+      "https://www.viacotur.com/api/gastos/register",
+      // "https://viacotur16-qa15-31954089.dev.odoo.com/api/gastos/register",
       {
         method: "POST",
         headers: {
@@ -243,11 +243,18 @@ export async function POST(req: Request) {
 
   const empleado: string = (body?.empleado || "").trim();
   const telegram_id: number | null = body?.telegram_id ?? null;
+  // PIN del conductor dueño del vehículo (distinto de telegram_id cuando el
+  // admin llena el formulario en nombre de un conductor).
+  const vehiculo_telegram_id: number | null = body?.vehiculo_telegram_id ?? telegram_id;
   const items: GastoOperativo[] = Array.isArray(body?.gastosOperativos) ? body.gastosOperativos : [];
   const loc = body?.ubicacion ?? {};
   const loc_lat = typeof loc?.lat === "number" ? loc.lat : null;
   const loc_lon = typeof loc?.lon === "number" ? loc.lon : null;
   const loc_ts  = loc?.ts ? new Date(loc.ts) : null;
+  // Fecha seleccionada por el usuario (YYYY-MM-DD), fallback a hoy
+  const fecha_gasto: string | null = body?.fecha_gasto
+    ? String(body.fecha_gasto)
+    : new Date().toISOString().split("T")[0];
 
   if (!empleado) return NextResponse.json({ error: "Falta 'empleado'" }, { status: 400 });
   if (!items.length) return NextResponse.json({ error: "Se requiere al menos un gasto" }, { status: 400 });
@@ -268,15 +275,16 @@ export async function POST(req: Request) {
 
     // Obtener ubicación del vehículo ANTES de insertar en la BD
     console.log("Obteniendo ubicación del vehículo para guardar en BD...");
-    const ubicacionVehiculoBD = await obtenerUbicacionVehiculo(telegram_id);
+    const ubicacionVehiculoBD = await obtenerUbicacionVehiculo(vehiculo_telegram_id);
 
     const q = `
       INSERT INTO public.gastos_operacionales (
         empleado, telegram_id, tipo, valor_total,
         loc_lat, loc_lon, loc_ts,
         vehiculo_placa, vehiculo_lat, vehiculo_lon, vehiculo_ts, ubicacion_gps_vehiculo,
-        archivo_nombre, archivo_tipo, archivo_base64
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        archivo_nombre, archivo_tipo, archivo_base64,
+        fecha_gasto
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       RETURNING id, id_ubicacion
     `;
 
@@ -304,11 +312,13 @@ export async function POST(req: Request) {
         ubicacionVehiculoBD?.lat || null,
         ubicacionVehiculoBD?.lon || null,
         ubicacionVehiculoBD?.timestamp || null,
-        ubicacionGpsVehiculoPoint, // Campo POINT de PostGIS
+        ubicacionGpsVehiculoPoint,
         // Datos del archivo adjunto
         it.archivo?.nombre || null,
         it.archivo?.tipo || null,
         it.archivo?.base64 || null,
+        // Fecha del gasto seleccionada por el usuario
+        fecha_gasto,
       ];
       const r = await client.query(q, params);
       const pgId = r.rows[0].id;

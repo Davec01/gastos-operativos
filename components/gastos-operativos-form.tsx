@@ -253,6 +253,7 @@ interface UbicacionVehiculo {
 export function GastosOperativosForm() {
   const [gastosOperativos, setGastosOperativos] = useState<GastoOperativo[]>([])
   const [empleado, setEmpleado] = useState<string>("")
+  const [conductorPin, setConductorPin] = useState<string>("")
   const [ubicacionVehiculo, setUbicacionVehiculo] = useState<UbicacionVehiculo | null>(null)
   const [cargandoVehiculo, setCargandoVehiculo] = useState<boolean>(false)
 
@@ -264,8 +265,57 @@ export function GastosOperativosForm() {
   const [isAdmin, setIsAdmin] = useState<boolean>(false)
   const [conductores, setConductores] = useState<{ nombre: string; pin: string }[]>([])
 
+  // Fecha del gasto (default hoy)
+  const [fechaGasto, setFechaGasto] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  )
+
   // Estado para prevenir doble envío
   const [enviando, setEnviando] = useState<boolean>(false)
+
+  // Carga (o recarga) la ubicación del vehículo asociado a un PIN/telegram_id dado.
+  // Se usa tanto para el conductor que abre su propio formulario como para el
+  // conductor que el admin selecciona en el dropdown.
+  const cargarUbicacionVehiculo = async (pinVehiculo: string) => {
+    setCargandoVehiculo(true)
+    setUbicacionVehiculo(null)
+    try {
+      const rVehiculo = await fetch(`/api/vehiculo-ubicacion?telegram_id=${encodeURIComponent(pinVehiculo)}`)
+      if (rVehiculo.ok) {
+        const dataVehiculo = await rVehiculo.json()
+        if (dataVehiculo.success && dataVehiculo.ubicacion) {
+          setUbicacionVehiculo({
+            lat: dataVehiculo.ubicacion.lat,
+            lon: dataVehiculo.ubicacion.lon,
+            placa: dataVehiculo.placa,
+            timestamp: dataVehiculo.ubicacion.timestamp,
+            vehiculo_nombre: dataVehiculo.vehiculo_nombre,
+          })
+          console.log(`✅ Ubicación del vehículo cargada: Placa ${dataVehiculo.placa}`)
+        } else {
+          console.warn(`⚠️ No se encontró vehículo asociado (PIN ${pinVehiculo})`)
+        }
+      }
+    } catch (eVehiculo) {
+      console.error("Error obteniendo ubicación del vehículo:", eVehiculo)
+    } finally {
+      setCargandoVehiculo(false)
+    }
+  }
+
+  // Cuando el admin selecciona un conductor en el dropdown, recarga el
+  // vehículo/GPS asociado a ESE conductor (no al PIN del admin).
+  const handleSeleccionarConductor = (nombreSeleccionado: string) => {
+    setEmpleado(nombreSeleccionado)
+    const conductor = conductores.find((c) => c.nombre === nombreSeleccionado)
+    const pin = conductor?.pin || ""
+    setConductorPin(pin)
+    if (pin) {
+      cargarUbicacionVehiculo(pin)
+    } else {
+      setUbicacionVehiculo(null)
+    }
+  }
 
   // Validar usuario registrado y autocompletar empleado
   useEffect(() => {
@@ -304,6 +354,8 @@ export function GastosOperativosForm() {
           const jLista = await rLista.json()
           setConductores(jLista?.conductores || [])
           console.log(`✅ Admin detectado, conductores cargados: ${jLista?.conductores?.length}`)
+          // El admin no tiene vehículo propio: el GPS del vehículo se carga
+          // cuando seleccione un conductor (ver handleSeleccionarConductor).
         } else {
           const r = await fetch(`/api/usuario-por-pin?pin=${encodeURIComponent(pin)}`)
           const j = await r.json()
@@ -319,31 +371,10 @@ export function GastosOperativosForm() {
               console.warn(`⚠️ No se encontró empleado con PIN: ${pin}`)
             }
           }
-        }
 
-        // PASO 3: Obtener ubicación del vehículo
-        setCargandoVehiculo(true)
-        try {
-          const rVehiculo = await fetch(`/api/vehiculo-ubicacion?telegram_id=${encodeURIComponent(pin)}`)
-          if (rVehiculo.ok) {
-            const dataVehiculo = await rVehiculo.json()
-            if (dataVehiculo.success && dataVehiculo.ubicacion) {
-              setUbicacionVehiculo({
-                lat: dataVehiculo.ubicacion.lat,
-                lon: dataVehiculo.ubicacion.lon,
-                placa: dataVehiculo.placa,
-                timestamp: dataVehiculo.ubicacion.timestamp,
-                vehiculo_nombre: dataVehiculo.vehiculo_nombre,
-              })
-              console.log(`✅ Ubicación del vehículo cargada: Placa ${dataVehiculo.placa}`)
-            } else {
-              console.warn(`⚠️ No se encontró vehículo asociado al empleado`)
-            }
-          }
-        } catch (eVehiculo) {
-          console.error("Error obteniendo ubicación del vehículo:", eVehiculo)
-        } finally {
-          setCargandoVehiculo(false)
+          // PASO 3: Obtener ubicación del vehículo propio del conductor
+          setConductorPin(pin)
+          await cargarUbicacionVehiculo(pin)
         }
       } catch (e) {
         console.error("Error en validación/carga inicial:", e)
@@ -404,8 +435,12 @@ export function GastosOperativosForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           telegram_id: tgId ? Number(tgId) : null,
+          // PIN del conductor dueño del vehículo (puede ser distinto de telegram_id
+          // cuando el admin llena el formulario en nombre de un conductor).
+          vehiculo_telegram_id: conductorPin ? Number(conductorPin) : (tgId ? Number(tgId) : null),
           empleado,
           gastosOperativos,
+          fecha_gasto: fechaGasto,
           ubicacion: {
             lat: loc.lat, lon: loc.lon, ts: loc.ts, fresh: loc.fresh
           }
@@ -608,13 +643,13 @@ export function GastosOperativosForm() {
 
         {/* Formulario */}
         <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8 mt-6 sm:mt-8">
-          {/* Conductor */}
+          {/* Conductor + Fecha */}
           <Card className="shadow-xl border-slate-300 bg-white rounded-2xl">
-            <CardContent className="p-4 sm:p-6 grid grid-cols-1 gap-4">
+            <CardContent className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-slate-900">Conductor</Label>
                 {isAdmin ? (
-                  <Select value={empleado} onValueChange={setEmpleado}>
+                  <Select value={empleado} onValueChange={handleSeleccionarConductor}>
                     <SelectTrigger className="h-11 sm:h-12 bg-slate-100 border-slate-400 rounded-xl">
                       <SelectValue placeholder="Seleccionar conductor..." />
                     </SelectTrigger>
@@ -635,6 +670,17 @@ export function GastosOperativosForm() {
                     placeholder="Cargando conductor..."
                   />
                 )}
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-slate-900">Fecha del Gasto</Label>
+                <Input
+                  type="date"
+                  value={fechaGasto}
+                  max={new Date().toISOString().split("T")[0]}
+                  onChange={(e) => setFechaGasto(e.target.value)}
+                  className="h-11 sm:h-12 bg-slate-100 border-slate-400 rounded-xl"
+                  required
+                />
               </div>
             </CardContent>
           </Card>
