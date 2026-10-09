@@ -390,7 +390,7 @@ Revisar que el campo `ubicacion_gps_vehiculo` contenga el formato:
 
 ```env
 # .env.local
-DATABASE_URL=postgresql://viacotur:viacotur_pass@34.174.97.159:5432/viacotur
+DATABASE_URL=postgresql://<PGUSER>:<PGPASSWORD>@34.174.97.159:5432/viacotur
 ```
 
 **Nota:** La URL de la API de flota está hardcodeada en el código. Si cambia, editar en:

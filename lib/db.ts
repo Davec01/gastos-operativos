@@ -1,21 +1,10 @@
-// // lib/db.ts
-// import { Pool } from 'pg';
-
-// export const pool = new Pool({
-//   user: 'viacotur',
-//   host: 'localhost', // o IP del contenedor, como 10.206.0.3
-//   database: 'viacotur',
-//   password: 'viacotur_pass',
-//   port: 5432,
-// });
-
 // lib/db.ts
 import { Pool } from 'pg';
 
 export const pool = new Pool({
-  user: "viacotur",               
-  host: "34.174.97.159",         
-  database: "viacotur",
-  password: "viacotur_pass",       
-  port: 5432,
+  user: process.env.PGUSER,
+  host: process.env.PGHOST,
+  database: process.env.PGDATABASE,
+  password: process.env.PGPASSWORD,
+  port: Number(process.env.PGPORT || 5432),
 });
