@@ -264,6 +264,10 @@ export async function POST(req: Request) {
     if (it.valorTotal === undefined || it.valorTotal === "") {
       return NextResponse.json({ error: `Falta 'valorTotal' (fila ${i + 1})` }, { status: 400 });
     }
+    // Solo se aceptan PDF ("JVBER" es "%PDF" en base64)
+    if (it.archivo?.base64 && !it.archivo.base64.startsWith("JVBER")) {
+      return NextResponse.json({ error: `El archivo de la fila ${i + 1} debe ser PDF` }, { status: 400 });
+    }
   }
 
   const client = await pool.connect();

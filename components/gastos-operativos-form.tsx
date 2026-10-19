@@ -114,6 +114,14 @@ function CamposEspecificos({
       return
     }
 
+    const esPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+    if (!esPdf) {
+      alert("Solo se permiten archivos PDF.")
+      e.target.value = ""
+      actualizar("archivo", undefined)
+      return
+    }
+
     const archivo = await convertirArchivoABase64(file)
     if (archivo) {
       actualizar("archivo", archivo)
@@ -156,7 +164,7 @@ function CamposEspecificos({
             <Label className="text-sm font-semibold text-slate-900">Factura/Soporte {gasto.tipo} *</Label>
             <Input
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
+              accept=".pdf,application/pdf"
               onChange={handleArchivoChange}
               className="h-11 sm:h-12 bg-slate-200 border-slate-400 rounded-xl file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-700 file:text-white"
             />
